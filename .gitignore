@@ -1,0 +1,38 @@
+# Envionmnet variables
+.env
+
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with 'go test -c'
+*.test
+
+# Output of the go coverage tool, specifically when run as 'go test -coverprofile=coverage.out'
+*.out
+coverage.txt
+
+# Dependency directories (uncomment if you don't track vendor directory, though modern Go tracks vendor via modules if desired)
+# vendor/
+
+# Workspace file (Go 1.18+)
+go.work
+
+# IDEs and Editors
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+
+# Operating System files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db

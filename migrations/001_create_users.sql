@@ -1,0 +1,24 @@
+CREATE TABLE users (
+    id BIGSERIAL PRIMARY KEY,
+
+    name VARCHAR(100) NOT NULL,
+
+    username VARCHAR(50) NOT NULL UNIQUE,
+
+    email VARCHAR(150) NOT NULL UNIQUE,
+
+    phone VARCHAR(15) UNIQUE,
+
+    password VARCHAR(255) NOT NULL,
+
+    balance BIGINT NOT NULL DEFAULT 0,
+
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    deleted_at TIMESTAMP WITH TIME ZONE
+);
+
+CREATE INDEX idx_users_deleted_at
+ON users(deleted_at);
