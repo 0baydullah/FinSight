@@ -30,10 +30,7 @@ func NewService(repo Repository) *Service {
 	}
 }
 
-func (s *Service) CreateUser(
-	ctx context.Context,
-	req CreateUserRequestDto,
-) (*UserResponseDto, error) {
+func (s *Service) CreateUser(ctx context.Context, req CreateUserRequestDto) (*UserResponseDto, error) {
 	req.Name = strings.TrimSpace(req.Name)
 	req.Username = strings.TrimSpace(req.Username)
 	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
@@ -81,6 +78,19 @@ func (s *Service) CreateUser(
 		return nil, err
 	}
 
+	// check whether the phone already exists.
+	if req.Phone != "" {
+		_, err = s.repo.GetByPhone(ctx, req.Phone)
+
+		if err == nil {
+			return nil, ErrPhoneTaken
+		}
+
+		if !errors.Is(err, ErrUserNotFound) {
+			return nil, err
+		}
+	}
+
 	// Hash the password before storing it.
 	hashedPassword, err := bcrypt.GenerateFromPassword(
 		[]byte(req.Password),
@@ -90,11 +100,17 @@ func (s *Service) CreateUser(
 		return nil, err
 	}
 
+	var phone *string
+
+	if req.Phone != "" {
+		phone = &req.Phone
+	}
+
 	newUser := &User{
 		Name:     req.Name,
 		Username: req.Username,
 		Email:    req.Email,
-		Phone:    req.Phone,
+		Phone:    phone,
 		Password: string(hashedPassword),
 		Balance:  0,
 	}
@@ -108,10 +124,18 @@ func (s *Service) CreateUser(
 		Name:      newUser.Name,
 		Username:  newUser.Username,
 		Email:     newUser.Email,
-		Phone:     newUser.Phone,
+		Phone:     phoneValue(newUser.Phone),
 		Balance:   formatTaka(newUser.Balance),
 		CreatedAt: newUser.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 	}, nil
+}
+
+func phoneValue(phone *string) string {
+	if phone == nil {
+		return ""
+	}
+
+	return *phone
 }
 
 func formatTaka(paisa int64) string {

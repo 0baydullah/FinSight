@@ -13,4 +13,5 @@ type Repository interface {
 	GetByID(ctx context.Context, id uint) (*User, error)
 	GetByUsername(ctx context.Context, username string) (*User, error)
 	GetByEmail(ctx context.Context, email string) (*User, error)
+	GetByPhone(ctx context.Context, phone string) (*User, error)
 }

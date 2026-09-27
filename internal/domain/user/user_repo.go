@@ -54,10 +54,7 @@ func (r *UserRepository) GetByUsername(
 	return &user, nil
 }
 
-func (r *UserRepository) GetByEmail(
-	ctx context.Context,
-	email string,
-) (*User, error) {
+func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*User, error) {
 	var user User
 
 	err := r.db.
@@ -65,6 +62,20 @@ func (r *UserRepository) GetByEmail(
 		Where("email = ?", email).
 		First(&user).
 		Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &user, nil
+}
+
+func (r *UserRepository) GetByPhone(ctx context.Context, phone string) (*User, error) {
+	var user User
+
+	err := r.db.WithContext(ctx).
+		Where("phone = ?", phone).
+		First(&user).Error
 
 	if err != nil {
 		return nil, err
