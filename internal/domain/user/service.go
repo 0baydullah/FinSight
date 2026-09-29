@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"time"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -181,4 +182,24 @@ func formatInt(n int64) string {
 		n /= 10
 	}
 	return result
+}
+
+func (s *Service) GetProfile(
+	ctx context.Context,
+	userID uint,
+) (*UserResponseDto, error) {
+	foundUser, err := s.repo.GetByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &UserResponseDto{
+		ID:        foundUser.ID,
+		Name:      foundUser.Name,
+		Username:  foundUser.Username,
+		Email:     foundUser.Email,
+		Phone:     phoneValue(foundUser.Phone),
+		Balance:   formatTaka(foundUser.Balance),
+		CreatedAt: foundUser.CreatedAt.Format(time.RFC3339),
+	}, nil
 }

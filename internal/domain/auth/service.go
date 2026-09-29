@@ -42,7 +42,7 @@ type Claims struct {
 	jwt.RegisteredClaims
 }
 
-func (s *Service) Login(ctx context.Context,req LoginRequestDto,) (*LoginResponseDto, error) {
+func (s *Service) Login(ctx context.Context, req LoginRequestDto) (*LoginResponseDto, error) {
 	req.Identifier = strings.TrimSpace(req.Identifier)
 
 	if req.Identifier == "" {

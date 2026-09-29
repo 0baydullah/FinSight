@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/0baydullah/FinSight/internal/requestctx"
 	"github.com/0baydullah/FinSight/internal/response"
 	"gorm.io/gorm"
 )
@@ -83,5 +84,49 @@ func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 		http.StatusCreated,
 		"User created successfully",
 		user,
+	)
+}
+
+func (h *Handler) GetMe(w http.ResponseWriter, r *http.Request) {
+	userID, err := requestctx.GetUserID(r.Context())
+	if err != nil {
+		response.ErrorJSON(
+			w,
+			http.StatusUnauthorized,
+			"Authentication required",
+			"UNAUTHORIZED",
+			nil,
+		)
+		return
+	}
+
+	profile, err := h.service.GetProfile(r.Context(), userID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			response.ErrorJSON(
+				w,
+				http.StatusNotFound,
+				"User not found",
+				"USER_NOT_FOUND",
+				nil,
+			)
+			return
+		}
+
+		response.ErrorJSON(
+			w,
+			http.StatusInternalServerError,
+			"Internal server error",
+			"INTERNAL_SERVER_ERROR",
+			nil,
+		)
+		return
+	}
+
+	response.JSON(
+		w,
+		http.StatusOK,
+		"Profile retrieved successfully",
+		profile,
 	)
 }

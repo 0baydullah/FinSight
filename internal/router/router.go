@@ -6,6 +6,7 @@ import (
 
 	authDomain "github.com/0baydullah/FinSight/internal/domain/auth"
 	userDomain "github.com/0baydullah/FinSight/internal/domain/user"
+	"github.com/0baydullah/FinSight/internal/middleware"
 )
 
 func Setup(
@@ -15,8 +16,9 @@ func Setup(
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /health", healthHandler)
-	mux.HandleFunc("POST /users", userHandler.CreateUser)
 	mux.HandleFunc("POST /auth/login", authHandler.Login)
+	mux.HandleFunc("POST /users", userHandler.CreateUser)
+	mux.Handle("GET /users/me", middleware.Auth(http.HandlerFunc(userHandler.GetMe)))
 
 	return mux
 }
