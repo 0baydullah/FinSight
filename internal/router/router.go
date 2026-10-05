@@ -19,6 +19,7 @@ func Setup(
 	mux.HandleFunc("POST /auth/login", authHandler.Login)
 	mux.HandleFunc("POST /users", userHandler.CreateUser)
 	mux.Handle("GET /users/me", middleware.Auth(http.HandlerFunc(userHandler.GetMe)))
+	mux.Handle("PATCH /users/me", middleware.Auth(http.HandlerFunc(userHandler.UpdateMe)))
 
 	return mux
 }

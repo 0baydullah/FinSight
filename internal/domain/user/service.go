@@ -203,3 +203,115 @@ func (s *Service) GetProfile(
 		CreatedAt: foundUser.CreatedAt.Format(time.RFC3339),
 	}, nil
 }
+
+func (s *Service) UpdateMe(
+	ctx context.Context,
+	userID uint,
+	req UpdateUserRequestDto,
+) (*UserResponseDto, error) {
+
+	user, err := s.repo.GetByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Name
+	if req.Name != nil {
+		name := strings.TrimSpace(*req.Name)
+
+		if name == "" {
+			return nil, ErrNameRequired
+		}
+
+		user.Name = name
+	}
+
+	// Username
+	if req.Username != nil {
+		username := strings.TrimSpace(*req.Username)
+
+		if username == "" {
+			return nil, ErrUsernameRequired
+		}
+
+		if username != user.Username {
+			existing, err := s.repo.GetByUsername(ctx, username)
+
+			if err == nil && existing.ID != user.ID {
+				return nil, ErrUsernameTaken
+			}
+
+			if err != nil && !errors.Is(err, ErrUserNotFound) {
+				return nil, err
+			}
+		}
+
+		user.Username = username
+	}
+
+	// Email
+	if req.Email != nil {
+		email := strings.ToLower(strings.TrimSpace(*req.Email))
+
+		if email == "" {
+			return nil, ErrEmailRequired
+		}
+
+		if !strings.Contains(email, "@") {
+			return nil, ErrInvalidEmail
+		}
+
+		if email != user.Email {
+			existing, err := s.repo.GetByEmail(ctx, email)
+
+			if err == nil && existing.ID != user.ID {
+				return nil, ErrEmailTaken
+			}
+
+			if err != nil && !errors.Is(err, ErrUserNotFound) {
+				return nil, err
+			}
+		}
+
+		user.Email = email
+	}
+
+	// Phone
+	if req.Phone != nil {
+		phone := strings.TrimSpace(*req.Phone)
+
+		if phone == "" {
+			user.Phone = nil
+		} else {
+			existing, err := s.repo.GetByPhone(ctx, phone)
+
+			if err == nil && existing.ID != user.ID {
+				return nil, ErrPhoneTaken
+			}
+
+			if err != nil && !errors.Is(err, ErrUserNotFound) {
+				return nil, err
+			}
+
+			user.Phone = &phone
+		}
+	}
+
+	if err := s.repo.Update(ctx, user); err != nil {
+		return nil, err
+	}
+
+	return s.toUserResponse(user), nil
+}
+
+func (s *Service) toUserResponse(user *User) *UserResponseDto {
+	return &UserResponseDto{
+		ID:        user.ID,
+		Name:      user.Name,
+		Username:  user.Username,
+		Email:     user.Email,
+		Phone:     phoneValue(user.Phone),
+		Balance:   formatTaka(user.Balance),
+		CreatedAt: user.CreatedAt.Format(time.RFC3339),
+	}
+}
