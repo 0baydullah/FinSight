@@ -6,8 +6,9 @@ import (
 	"time"
 
 	authDomain "github.com/0baydullah/FinSight/internal/domain/auth"
-	userDomain "github.com/0baydullah/FinSight/internal/domain/user"
 	categoryDomain "github.com/0baydullah/FinSight/internal/domain/category"
+	transactionDomain "github.com/0baydullah/FinSight/internal/domain/transaction"
+	userDomain "github.com/0baydullah/FinSight/internal/domain/user"
 	"github.com/0baydullah/FinSight/internal/router"
 	"gorm.io/gorm"
 )
@@ -32,13 +33,24 @@ func SetupHandler(db *gorm.DB) http.Handler {
 	authHandler := authDomain.NewHandler(authService)
 
 	// category dependencies
-	// category dependencies
 	categoryRepo := categoryDomain.NewCategoryRepository(db)
 	categoryService := categoryDomain.NewService(categoryRepo)
 	categoryHandler := categoryDomain.NewHandler(categoryService)
 
+	// transaction dependencies
+	transactionRepo := transactionDomain.NewTransactionRepository(db)
+
+	transactionService := transactionDomain.NewService(
+		transactionRepo,
+		categoryRepo,
+	)
+
+	transactionHandler := transactionDomain.NewHandler(
+		transactionService,
+	)
+
 	// Register routes
-	return router.Setup(userHandler, authHandler, categoryHandler,)
+	return router.Setup(userHandler, authHandler, categoryHandler, transactionHandler)
 }
 
 func getJWTExpiration() time.Duration {
