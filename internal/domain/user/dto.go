@@ -17,3 +17,9 @@ type UserResponseDto struct {
 	Balance   string `json:"balance"`
 	CreatedAt string `json:"created_at"`
 }
+type UpdateUserRequestDto struct {
+	Name     *string `json:"name"`
+	Username *string `json:"username"`
+	Email    *string `json:"email"`
+	Phone    *string `json:"phone"`
+}

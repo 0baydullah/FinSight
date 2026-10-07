@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"time"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -30,10 +31,7 @@ func NewService(repo Repository) *Service {
 	}
 }
 
-func (s *Service) CreateUser(
-	ctx context.Context,
-	req CreateUserRequestDto,
-) (*UserResponseDto, error) {
+func (s *Service) CreateUser(ctx context.Context, req CreateUserRequestDto) (*UserResponseDto, error) {
 	req.Name = strings.TrimSpace(req.Name)
 	req.Username = strings.TrimSpace(req.Username)
 	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
@@ -81,6 +79,19 @@ func (s *Service) CreateUser(
 		return nil, err
 	}
 
+	// check whether the phone already exists.
+	if req.Phone != "" {
+		_, err = s.repo.GetByPhone(ctx, req.Phone)
+
+		if err == nil {
+			return nil, ErrPhoneTaken
+		}
+
+		if !errors.Is(err, ErrUserNotFound) {
+			return nil, err
+		}
+	}
+
 	// Hash the password before storing it.
 	hashedPassword, err := bcrypt.GenerateFromPassword(
 		[]byte(req.Password),
@@ -90,11 +101,17 @@ func (s *Service) CreateUser(
 		return nil, err
 	}
 
+	var phone *string
+
+	if req.Phone != "" {
+		phone = &req.Phone
+	}
+
 	newUser := &User{
 		Name:     req.Name,
 		Username: req.Username,
 		Email:    req.Email,
-		Phone:    req.Phone,
+		Phone:    phone,
 		Password: string(hashedPassword),
 		Balance:  0,
 	}
@@ -108,10 +125,18 @@ func (s *Service) CreateUser(
 		Name:      newUser.Name,
 		Username:  newUser.Username,
 		Email:     newUser.Email,
-		Phone:     newUser.Phone,
+		Phone:     phoneValue(newUser.Phone),
 		Balance:   formatTaka(newUser.Balance),
 		CreatedAt: newUser.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 	}, nil
+}
+
+func phoneValue(phone *string) string {
+	if phone == nil {
+		return ""
+	}
+
+	return *phone
 }
 
 func formatTaka(paisa int64) string {
@@ -157,4 +182,136 @@ func formatInt(n int64) string {
 		n /= 10
 	}
 	return result
+}
+
+func (s *Service) GetProfile(
+	ctx context.Context,
+	userID uint,
+) (*UserResponseDto, error) {
+	foundUser, err := s.repo.GetByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &UserResponseDto{
+		ID:        foundUser.ID,
+		Name:      foundUser.Name,
+		Username:  foundUser.Username,
+		Email:     foundUser.Email,
+		Phone:     phoneValue(foundUser.Phone),
+		Balance:   formatTaka(foundUser.Balance),
+		CreatedAt: foundUser.CreatedAt.Format(time.RFC3339),
+	}, nil
+}
+
+func (s *Service) UpdateMe(
+	ctx context.Context,
+	userID uint,
+	req UpdateUserRequestDto,
+) (*UserResponseDto, error) {
+
+	user, err := s.repo.GetByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Name
+	if req.Name != nil {
+		name := strings.TrimSpace(*req.Name)
+
+		if name == "" {
+			return nil, ErrNameRequired
+		}
+
+		user.Name = name
+	}
+
+	// Username
+	if req.Username != nil {
+		username := strings.TrimSpace(*req.Username)
+
+		if username == "" {
+			return nil, ErrUsernameRequired
+		}
+
+		if username != user.Username {
+			existing, err := s.repo.GetByUsername(ctx, username)
+
+			if err == nil && existing.ID != user.ID {
+				return nil, ErrUsernameTaken
+			}
+
+			if err != nil && !errors.Is(err, ErrUserNotFound) {
+				return nil, err
+			}
+		}
+
+		user.Username = username
+	}
+
+	// Email
+	if req.Email != nil {
+		email := strings.ToLower(strings.TrimSpace(*req.Email))
+
+		if email == "" {
+			return nil, ErrEmailRequired
+		}
+
+		if !strings.Contains(email, "@") {
+			return nil, ErrInvalidEmail
+		}
+
+		if email != user.Email {
+			existing, err := s.repo.GetByEmail(ctx, email)
+
+			if err == nil && existing.ID != user.ID {
+				return nil, ErrEmailTaken
+			}
+
+			if err != nil && !errors.Is(err, ErrUserNotFound) {
+				return nil, err
+			}
+		}
+
+		user.Email = email
+	}
+
+	// Phone
+	if req.Phone != nil {
+		phone := strings.TrimSpace(*req.Phone)
+
+		if phone == "" {
+			user.Phone = nil
+		} else {
+			existing, err := s.repo.GetByPhone(ctx, phone)
+
+			if err == nil && existing.ID != user.ID {
+				return nil, ErrPhoneTaken
+			}
+
+			if err != nil && !errors.Is(err, ErrUserNotFound) {
+				return nil, err
+			}
+
+			user.Phone = &phone
+		}
+	}
+
+	if err := s.repo.Update(ctx, user); err != nil {
+		return nil, err
+	}
+
+	return s.toUserResponse(user), nil
+}
+
+func (s *Service) toUserResponse(user *User) *UserResponseDto {
+	return &UserResponseDto{
+		ID:        user.ID,
+		Name:      user.Name,
+		Username:  user.Username,
+		Email:     user.Email,
+		Phone:     phoneValue(user.Phone),
+		Balance:   formatTaka(user.Balance),
+		CreatedAt: user.CreatedAt.Format(time.RFC3339),
+	}
 }
