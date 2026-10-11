@@ -7,6 +7,7 @@ import (
 
 	authDomain "github.com/0baydullah/FinSight/internal/domain/auth"
 	categoryDomain "github.com/0baydullah/FinSight/internal/domain/category"
+	reportDomain "github.com/0baydullah/FinSight/internal/domain/report"
 	transactionDomain "github.com/0baydullah/FinSight/internal/domain/transaction"
 	userDomain "github.com/0baydullah/FinSight/internal/domain/user"
 	"github.com/0baydullah/FinSight/internal/router"
@@ -49,8 +50,13 @@ func SetupHandler(db *gorm.DB) http.Handler {
 		transactionService,
 	)
 
+	// report dependencies
+	reportRepo := reportDomain.NewRepository(db)
+	reportService := reportDomain.NewService(reportRepo)
+	reportHandler := reportDomain.NewHandler(reportService)
+
 	// Register routes
-	return router.Setup(userHandler, authHandler, categoryHandler, transactionHandler)
+	return router.Setup(userHandler, authHandler, categoryHandler, transactionHandler, reportHandler)
 }
 
 func getJWTExpiration() time.Duration {

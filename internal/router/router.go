@@ -6,6 +6,7 @@ import (
 
 	authDomain "github.com/0baydullah/FinSight/internal/domain/auth"
 	categoryDomain "github.com/0baydullah/FinSight/internal/domain/category"
+	reportDomain "github.com/0baydullah/FinSight/internal/domain/report"
 	transactionDomain "github.com/0baydullah/FinSight/internal/domain/transaction"
 	userDomain "github.com/0baydullah/FinSight/internal/domain/user"
 	"github.com/0baydullah/FinSight/internal/middleware"
@@ -16,6 +17,7 @@ func Setup(
 	authHandler *authDomain.Handler,
 	categoryHandler *categoryDomain.Handler,
 	transactionHandler *transactionDomain.Handler,
+	reportHandler *reportDomain.Handler,
 ) http.Handler {
 	mux := http.NewServeMux()
 
@@ -68,6 +70,13 @@ func Setup(
 	mux.Handle(
 		"DELETE /transactions/{id}",
 		middleware.Auth(http.HandlerFunc(transactionHandler.Delete)),
+	)
+
+	// report routes
+	// summary
+	mux.Handle(
+		"GET /reports/summary",
+		middleware.Auth(http.HandlerFunc(reportHandler.GetSummary)),
 	)
 
 	return mux
