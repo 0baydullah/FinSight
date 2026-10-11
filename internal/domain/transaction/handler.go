@@ -5,6 +5,8 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/0baydullah/FinSight/internal/requestctx"
 	"github.com/0baydullah/FinSight/internal/response"
@@ -110,32 +112,160 @@ func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
 			http.StatusUnauthorized,
 			"Unauthorized",
 			"UNAUTHORIZED",
-			nil,
+			err.Error(),
 		)
 		return
 	}
 
-	transactions, err := h.service.GetAll(
+	query := r.URL.Query()
+
+	// Pagination
+	page := 1
+	if value := query.Get("page"); value != "" {
+		parsed, err := strconv.Atoi(value)
+		if err != nil || parsed < 1 {
+			response.ErrorJSON(
+				w,
+				http.StatusBadRequest,
+				"Invalid page",
+				"INVALID_PAGE",
+				"page must be a positive integer",
+			)
+			return
+		}
+		page = parsed
+	}
+
+	limit := 10
+	if value := query.Get("limit"); value != "" {
+		parsed, err := strconv.Atoi(value)
+		if err != nil || parsed < 1 {
+			response.ErrorJSON(
+				w,
+				http.StatusBadRequest,
+				"Invalid limit",
+				"INVALID_LIMIT",
+				"limit must be a positive integer",
+			)
+			return
+		}
+		limit = parsed
+	}
+
+	if limit > 100 {
+		limit = 100
+	}
+
+	filter := TransactionFilter{
+		Type:   strings.ToLower(strings.TrimSpace(query.Get("type"))),
+		Search: strings.TrimSpace(query.Get("search")),
+		Page:   page,
+		Limit:  limit,
+	}
+
+	// Multiple categories: ?category_ids=1,3,5
+	if value := query.Get("category_ids"); value != "" {
+		for _, item := range strings.Split(value, ",") {
+			item = strings.TrimSpace(item)
+
+			id, err := strconv.ParseUint(item, 10, 64)
+			if err != nil || id == 0 {
+				response.ErrorJSON(
+					w,
+					http.StatusBadRequest,
+					"Invalid category IDs",
+					"INVALID_CATEGORY_IDS",
+					"category_ids must contain comma-separated positive integers",
+				)
+				return
+			}
+
+			filter.CategoryIDs = append(filter.CategoryIDs, uint(id))
+		}
+	}
+
+	// Date filters use YYYY-MM-DD.
+	if value := query.Get("from"); value != "" {
+		from, err := time.Parse("2006-01-02", value)
+		if err != nil {
+			response.ErrorJSON(
+				w,
+				http.StatusBadRequest,
+				"Invalid from date",
+				"INVALID_FROM_DATE",
+				"from must use YYYY-MM-DD format",
+			)
+			return
+		}
+
+		filter.From = &from
+	}
+
+	if value := query.Get("to"); value != "" {
+		to, err := time.Parse("2006-01-02", value)
+		if err != nil {
+			response.ErrorJSON(
+				w,
+				http.StatusBadRequest,
+				"Invalid to date",
+				"INVALID_TO_DATE",
+				"to must use YYYY-MM-DD format",
+			)
+			return
+		}
+
+		// Exclusive upper bound includes the entire selected day.
+		to = to.AddDate(0, 0, 1)
+		filter.To = &to
+	}
+
+	if filter.From != nil &&
+		filter.To != nil &&
+		!filter.From.Before(*filter.To) {
+		response.ErrorJSON(
+			w,
+			http.StatusBadRequest,
+			"Invalid date range",
+			"INVALID_DATE_RANGE",
+			"from must be on or before to",
+		)
+		return
+	}
+
+	transactions, pagination, err := h.service.GetAll(
 		r.Context(),
 		userID,
+		filter,
 	)
-
 	if err != nil {
+		if errors.Is(err, ErrTransactionTypeInvalid) ||
+			errors.Is(err, ErrTransactionCategory) {
+			response.ErrorJSON(
+				w,
+				http.StatusBadRequest,
+				"Invalid filter",
+				"INVALID_FILTER",
+				err.Error(),
+			)
+			return
+		}
+
 		response.ErrorJSON(
 			w,
 			http.StatusInternalServerError,
 			"Failed to retrieve transactions",
-			"INTERNAL_ERROR",
-			nil,
+			"TRANSACTION_LIST_FAILED",
+			err.Error(),
 		)
 		return
 	}
 
-	response.JSON(
+	response.JSONWithPagination(
 		w,
 		http.StatusOK,
 		"Transactions retrieved successfully",
 		transactions,
+		pagination,
 	)
 }
 

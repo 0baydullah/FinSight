@@ -109,22 +109,77 @@ func (s *Service) Create(
 }
 
 func (s *Service) GetAll(
-	ctx context.Context,
-	userID uint,
-) ([]TransactionResponseDto, error) {
+    ctx context.Context,
+    userID uint,
+    filter TransactionFilter,
+) ([]TransactionResponseDto, TransactionPaginationDto, error) {
+    // Always use the authenticated user's ID.
+    filter.UserID = userID
 
-	transactions, err := s.repo.GetByUserID(ctx, userID)
-	if err != nil {
-		return nil, err
-	}
+    // Set pagination defaults.
+    if filter.Page < 1 {
+        filter.Page = 1
+    }
 
-	result := make([]TransactionResponseDto, 0, len(transactions))
+    if filter.Limit < 1 {
+        filter.Limit = 10
+    }
 
-	for _, transaction := range transactions {
-		result = append(result, *toTransactionResponse(&transaction))
-	}
+    if filter.Limit > 100 {
+        filter.Limit = 100
+    }
 
-	return result, nil
+    // An empty type means both income and expense.
+    if filter.Type != "" &&
+        filter.Type != TypeIncome &&
+        filter.Type != TypeExpense {
+        return nil, TransactionPaginationDto{}, ErrTransactionTypeInvalid
+    }
+
+    // Validate ownership of every requested category.
+    for _, categoryID := range filter.CategoryIDs {
+        selectedCategory, err := s.categoryRepo.GetByID(
+            ctx,
+            categoryID,
+        )
+        if err != nil {
+            if errors.Is(err, gorm.ErrRecordNotFound) {
+                return nil, TransactionPaginationDto{}, ErrTransactionCategory
+            }
+
+            return nil, TransactionPaginationDto{}, err
+        }
+
+        if selectedCategory == nil ||
+            selectedCategory.UserID != userID {
+            return nil, TransactionPaginationDto{}, ErrTransactionCategory
+        }
+    }
+
+    // Query the repository.
+    page, err := s.repo.List(ctx, filter)
+    if err != nil {
+        return nil, TransactionPaginationDto{}, err
+    }
+
+    // Convert domain models to response DTOs.
+    result := make([]TransactionResponseDto, 0, len(page.Items))
+
+    for i := range page.Items {
+        result = append(
+            result,
+            *toTransactionResponse(&page.Items[i]),
+        )
+    }
+
+    pagination := TransactionPaginationDto{
+        Page:       page.Page,
+        Limit:      page.Limit,
+        Total:      page.Total,
+        TotalPages: page.TotalPages,
+    }
+
+    return result, pagination, nil
 }
 
 func (s *Service) GetByID(

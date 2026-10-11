@@ -65,3 +65,23 @@ func writeJSON(
 
 	_ = json.NewEncoder(w).Encode(response)
 }
+
+func JSONWithPagination(
+	w http.ResponseWriter,
+	statusCode int,
+	message string,
+	data interface{},
+	pagination interface{},
+) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+
+	json.NewEncoder(w).Encode(Response{
+		Code:       statusCode,
+		Success:    statusCode >= 200 && statusCode < 300,
+		Message:    message,
+		Data:       data,
+		Error:      nil,
+		Pagination: pagination,
+	})
+}

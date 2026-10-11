@@ -107,3 +107,68 @@ func (r *TransactionRepository) Delete(
 			Error
 	})
 }
+
+func (r *TransactionRepository) List(
+	ctx context.Context,
+	filter TransactionFilter,
+) (*TransactionPage, error) {
+	query := r.db.WithContext(ctx).
+		Model(&Transaction{}).
+		Where("user_id = ?", filter.UserID)
+
+	if filter.Type != "" {
+		query = query.Where("type = ?", filter.Type)
+	}
+
+	if len(filter.CategoryIDs) > 0 {
+		query = query.Where("category_id IN ?", filter.CategoryIDs)
+	}
+
+	if filter.From != nil {
+		query = query.Where("transaction_date >= ?", *filter.From)
+	}
+
+	if filter.To != nil {
+		query = query.Where("transaction_date < ?", *filter.To)
+	}
+
+	if filter.Search != "" {
+		query = query.Where(
+			"description ILIKE ?",
+			"%"+filter.Search+"%",
+		)
+	}
+
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		return nil, err
+	}
+
+	offset := (filter.Page - 1) * filter.Limit
+
+	var items []Transaction
+	if err := query.
+		Order("transaction_date DESC").
+		Order("id DESC").
+		Limit(filter.Limit).
+		Offset(offset).
+		Find(&items).Error; err != nil {
+		return nil, err
+	}
+
+	totalPages := 0
+	if total > 0 {
+		totalPages = int(
+			(total + int64(filter.Limit) - 1) /
+				int64(filter.Limit),
+		)
+	}
+
+	return &TransactionPage{
+		Items:      items,
+		Total:      total,
+		Page:       filter.Page,
+		Limit:      filter.Limit,
+		TotalPages: totalPages,
+	}, nil
+}

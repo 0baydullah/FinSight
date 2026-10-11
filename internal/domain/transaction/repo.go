@@ -7,7 +7,7 @@ type Repository interface {
 
 	GetByID(ctx context.Context, id uint) (*Transaction, error)
 
-	GetByUserID(ctx context.Context, userID uint) ([]Transaction, error)
+	List(ctx context.Context, filter TransactionFilter) (*TransactionPage, error)
 
 	Update(ctx context.Context, transaction *Transaction, balanceDelta int64) error
 
