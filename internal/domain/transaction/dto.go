@@ -27,16 +27,16 @@ type TransactionResponseDto struct {
 }
 
 type TransactionListResponseDto struct {
-    Items      []TransactionResponseDto `json:"items"`
-    Page       int                      `json:"page"`
-    Limit      int                      `json:"limit"`
-    Total      int64                    `json:"total"`
-    TotalPages int                      `json:"total_pages"`
+	Items      []TransactionResponseDto `json:"items"`
+	Page       int                      `json:"page"`
+	Limit      int                      `json:"limit"`
+	Total      int64                    `json:"total"`
+	TotalPages int                      `json:"total_pages"`
 }
 
 type TransactionPaginationDto struct {
-    Page       int   `json:"page"`
-    Limit      int   `json:"limit"`
-    Total      int64 `json:"total"`
-    TotalPages int   `json:"total_pages"`
+	Page       int   `json:"page"`
+	Limit      int   `json:"limit"`
+	Total      int64 `json:"total"`
+	TotalPages int   `json:"total_pages"`
 }

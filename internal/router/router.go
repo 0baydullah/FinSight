@@ -78,6 +78,11 @@ func Setup(
 		"GET /reports/summary",
 		middleware.Auth(http.HandlerFunc(reportHandler.GetSummary)),
 	)
+	// daily
+	mux.Handle(
+		"GET /reports/daily",
+		middleware.Auth(http.HandlerFunc(reportHandler.GetDailyReport)),
+	)
 
 	return mux
 }

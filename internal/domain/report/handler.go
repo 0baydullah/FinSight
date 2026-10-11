@@ -22,14 +22,14 @@ func (h *Handler) GetSummary(w http.ResponseWriter, r *http.Request) {
 		response.ErrorJSON(
 			w,
 			http.StatusUnauthorized,
-			"Unauthorized",
+			"Authentication required",
 			"UNAUTHORIZED",
-			err.Error(),
+			nil,
 		)
 		return
 	}
 
-	summary, err := h.service.GetSummary(
+	result, err := h.service.GetSummary(
 		r.Context(),
 		userID,
 		r.URL.Query().Get("from"),
@@ -39,36 +39,65 @@ func (h *Handler) GetSummary(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case errors.Is(err, ErrInvalidDate):
 			response.ErrorJSON(
-				w,
-				http.StatusBadRequest,
-				"Invalid date",
-				"INVALID_DATE",
-				err.Error(),
+				w, http.StatusBadRequest,
+				err.Error(), "INVALID_DATE", nil,
 			)
 		case errors.Is(err, ErrInvalidRange):
 			response.ErrorJSON(
-				w,
-				http.StatusBadRequest,
-				"Invalid date range",
-				"INVALID_DATE_RANGE",
-				err.Error(),
+				w, http.StatusBadRequest,
+				err.Error(), "INVALID_DATE_RANGE", nil,
 			)
 		default:
 			response.ErrorJSON(
-				w,
-				http.StatusInternalServerError,
-				"Failed to retrieve financial summary",
-				"SUMMARY_FAILED",
-				err.Error(),
+				w, http.StatusInternalServerError,
+				"Failed to generate summary", "INTERNAL_ERROR", nil,
 			)
 		}
 		return
 	}
 
-	response.JSON(
-		w,
-		http.StatusOK,
-		"Financial summary retrieved successfully",
-		summary,
+	response.JSON(w, http.StatusOK, "Report summary retrieved successfully", result)
+}
+
+func (h *Handler) GetDailyReport(w http.ResponseWriter, r *http.Request) {
+	userID, err := requestctx.GetUserID(r.Context())
+	if err != nil {
+		response.ErrorJSON(
+			w,
+			http.StatusUnauthorized,
+			"Authentication required",
+			"UNAUTHORIZED",
+			nil,
+		)
+		return
+	}
+
+	result, err := h.service.GetDailyReport(
+		r.Context(),
+		userID,
+		r.URL.Query().Get("from"),
+		r.URL.Query().Get("to"),
 	)
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrInvalidDate):
+			response.ErrorJSON(
+				w, http.StatusBadRequest,
+				err.Error(), "INVALID_DATE", nil,
+			)
+		case errors.Is(err, ErrInvalidRange):
+			response.ErrorJSON(
+				w, http.StatusBadRequest,
+				err.Error(), "INVALID_DATE_RANGE", nil,
+			)
+		default:
+			response.ErrorJSON(
+				w, http.StatusInternalServerError,
+				"Failed to generate daily report", "INTERNAL_ERROR", nil,
+			)
+		}
+		return
+	}
+
+	response.JSON(w, http.StatusOK, "Daily report retrieved successfully", result)
 }
