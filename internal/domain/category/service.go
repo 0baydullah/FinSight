@@ -19,11 +19,18 @@ func NewService(repo Repository) *Service {
 	}
 }
 
+const (
+	CategoryTypeExpense = "expense"
+	CategoryTypeIncome  = "income"
+	CategoryTypeBoth    = "both"
+)
+
 var (
 	ErrCategoryNameRequired = errors.New("category name is required")
 	ErrCategoryNotFound     = errors.New("category not found")
 	ErrCategoryNameTaken    = errors.New("category name already exists")
 	ErrUnauthorizedCategory = errors.New("unauthorized category access")
+	ErrInvalidCategoryType  = errors.New("invalid category type")
 )
 
 func (s *Service) Create(
@@ -37,7 +44,13 @@ func (s *Service) Create(
 	if name == "" {
 		return nil, ErrCategoryNameRequired
 	}
+	if req.Type == "" {
+		req.Type = CategoryTypeExpense
+	}
 
+	if !isValidCategoryType(req.Type) {
+		return nil, ErrInvalidCategoryType
+	}
 	categories, err := s.repo.GetByUserID(ctx, userID)
 	if err != nil {
 		return nil, err
@@ -52,6 +65,7 @@ func (s *Service) Create(
 	category := &Category{
 		UserID:   userID,
 		Name:     name,
+		Type:     req.Type,
 		IsSystem: false,
 	}
 
@@ -129,6 +143,15 @@ func (s *Service) Update(
 		return nil, ErrCategoryNameRequired
 	}
 
+	// Preserve the current type when the request omits it.
+	if req.Type != "" {
+		if !isValidCategoryType(req.Type) {
+			return nil, ErrInvalidCategoryType
+		}
+
+		category.Type = req.Type
+	}
+
 	if !strings.EqualFold(category.Name, name) {
 		categories, err := s.repo.GetByUserID(ctx, userID)
 		if err != nil {
@@ -180,5 +203,22 @@ func toCategoryResponse(category *Category) *CategoryResponseDto {
 		Name:      category.Name,
 		IsSystem:  category.IsSystem,
 		CreatedAt: category.CreatedAt.Format(time.RFC3339),
+		Type:      category.Type,
 	}
+}
+
+func isValidCategoryType(categoryType string) bool {
+	switch categoryType {
+	case CategoryTypeExpense, CategoryTypeIncome, CategoryTypeBoth:
+		return true
+	default:
+		return false
+	}
+}
+func categorySupportsTransaction(
+	categoryType string,
+	transactionType string,
+) bool {
+	return categoryType == CategoryTypeBoth ||
+		categoryType == transactionType
 }

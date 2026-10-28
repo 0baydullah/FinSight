@@ -11,6 +11,7 @@ type Category struct {
 	UserID    uint   `gorm:"not null;index"`
 	Name      string `gorm:"size:100;not null"`
 	IsSystem  bool   `gorm:"not null;default:false"`
+	Type      string `gorm:"type:varchar(10);not null;default:'expense'"`
 	CreatedAt time.Time
 	UpdatedAt time.Time
 	DeletedAt gorm.DeletedAt `gorm:"index"`

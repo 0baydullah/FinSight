@@ -45,30 +45,33 @@ func (s *Service) Create(
 	userID uint,
 	req CreateTransactionRequestDto,
 ) (*TransactionResponseDto, error) {
-
 	if req.CategoryID == 0 {
 		return nil, ErrTransactionCategory
+	}
+
+	// Validate the requested transaction type first.
+	if req.Type != TypeIncome && req.Type != TypeExpense {
+		return nil, ErrTransactionTypeInvalid
 	}
 
 	selectedCategory, err := s.categoryRepo.GetByID(
 		ctx,
 		req.CategoryID,
 	)
-
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrTransactionCategory
 		}
-
 		return nil, err
 	}
 
-	if selectedCategory.UserID != userID {
+	if selectedCategory == nil || selectedCategory.UserID != userID {
 		return nil, ErrTransactionCategory
 	}
 
-	if req.Type != TypeIncome && req.Type != TypeExpense {
-		return nil, ErrTransactionTypeInvalid
+	// Ensure the category supports this transaction type.
+	if !validateCategoryType(selectedCategory.Type, req.Type) {
+		return nil, ErrTransactionCategory
 	}
 
 	amount, err := parseAmount(req.Amount)
@@ -76,7 +79,10 @@ func (s *Service) Create(
 		return nil, ErrTransactionAmountInvalid
 	}
 
-	transactionDate, err := time.Parse(time.RFC3339, req.TransactionDate)
+	transactionDate, err := time.Parse(
+		time.RFC3339,
+		req.TransactionDate,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("invalid transaction date: %w", err)
 	}
@@ -96,7 +102,6 @@ func (s *Service) Create(
 	}
 
 	balanceDelta := amount
-
 	if req.Type == TypeExpense {
 		balanceDelta = -amount
 	}
@@ -146,23 +151,19 @@ func (s *Service) GetAll(
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return nil, TransactionPaginationDto{}, ErrTransactionCategory
 			}
-
 			return nil, TransactionPaginationDto{}, err
 		}
 
-		if selectedCategory == nil ||
-			selectedCategory.UserID != userID {
+		if selectedCategory == nil || selectedCategory.UserID != userID {
 			return nil, TransactionPaginationDto{}, ErrTransactionCategory
 		}
 	}
 
-	// Query the repository.
 	page, err := s.repo.List(ctx, filter)
 	if err != nil {
 		return nil, TransactionPaginationDto{}, err
 	}
 
-	// Convert domain models to response DTOs.
 	result := make([]TransactionResponseDto, 0, len(page.Items))
 
 	for i := range page.Items {
@@ -187,14 +188,11 @@ func (s *Service) GetByID(
 	userID uint,
 	transactionID uint,
 ) (*TransactionResponseDto, error) {
-
 	transaction, err := s.repo.GetByID(ctx, transactionID)
-
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrTransactionNotFound
 		}
-
 		return nil, err
 	}
 
@@ -213,7 +211,6 @@ func parseAmount(value string) (int64, error) {
 	}
 
 	parts := strings.Split(value, ".")
-
 	if len(parts) > 2 {
 		return 0, ErrTransactionAmountInvalid
 	}
@@ -228,7 +225,7 @@ func parseAmount(value string) (int64, error) {
 	if len(parts) == 2 {
 		fractionPart := parts[1]
 
-		if len(fractionPart) > 2 {
+		if len(fractionPart) == 0 || len(fractionPart) > 2 {
 			return 0, ErrTransactionAmountInvalid
 		}
 
@@ -236,11 +233,9 @@ func parseAmount(value string) (int64, error) {
 			fractionPart += "0"
 		}
 
-		if fractionPart != "" {
-			fraction, err = strconv.ParseInt(fractionPart, 10, 64)
-			if err != nil {
-				return 0, ErrTransactionAmountInvalid
-			}
+		fraction, err = strconv.ParseInt(fractionPart, 10, 64)
+		if err != nil {
+			return 0, ErrTransactionAmountInvalid
 		}
 	}
 
@@ -253,14 +248,11 @@ func (s *Service) Update(
 	transactionID uint,
 	req UpdateTransactionRequestDto,
 ) (*TransactionResponseDto, error) {
-
 	transaction, err := s.repo.GetByID(ctx, transactionID)
-
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrTransactionNotFound
 		}
-
 		return nil, err
 	}
 
@@ -273,6 +265,7 @@ func (s *Service) Update(
 		transaction.Amount,
 	)
 
+	// Update category if supplied.
 	if req.CategoryID != nil {
 		if *req.CategoryID == 0 {
 			return nil, ErrTransactionCategory
@@ -282,34 +275,32 @@ func (s *Service) Update(
 			ctx,
 			*req.CategoryID,
 		)
-
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return nil, ErrTransactionCategory
 			}
-
 			return nil, err
 		}
 
-		if selectedCategory.UserID != userID {
+		if selectedCategory == nil || selectedCategory.UserID != userID {
 			return nil, ErrTransactionCategory
 		}
 
 		transaction.CategoryID = *req.CategoryID
 	}
 
+	// Update type if supplied.
 	if req.Type != nil {
-		if *req.Type != TypeIncome &&
-			*req.Type != TypeExpense {
+		if *req.Type != TypeIncome && *req.Type != TypeExpense {
 			return nil, ErrTransactionTypeInvalid
 		}
 
 		transaction.Type = *req.Type
 	}
 
+	// Update amount if supplied.
 	if req.Amount != nil {
 		amount, err := parseAmount(*req.Amount)
-
 		if err != nil || amount <= 0 {
 			return nil, ErrTransactionAmountInvalid
 		}
@@ -317,6 +308,7 @@ func (s *Service) Update(
 		transaction.Amount = amount
 	}
 
+	// Update description if supplied.
 	if req.Description != nil {
 		description := strings.TrimSpace(*req.Description)
 
@@ -327,19 +319,42 @@ func (s *Service) Update(
 		}
 	}
 
+	// Update transaction date if supplied.
 	if req.TransactionDate != nil {
 		transactionDate, err := time.Parse(
 			time.RFC3339,
 			*req.TransactionDate,
 		)
-
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("invalid transaction date: %w", err)
 		}
 
 		transaction.TransactionDate = transactionDate
 	}
 
+	// STEP 4:
+	// Validate the final category against the final transaction type.
+	// This also catches a type change when the category wasn't changed.
+	selectedCategory, err := s.categoryRepo.GetByID(
+		ctx,
+		transaction.CategoryID,
+	)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrTransactionCategory
+		}
+		return nil, err
+	}
+
+	if selectedCategory == nil || selectedCategory.UserID != userID {
+		return nil, ErrTransactionCategory
+	}
+
+	if !validateCategoryType(selectedCategory.Type, transaction.Type) {
+		return nil, ErrTransactionCategory
+	}
+
+	// Recalculate the balance impact after all validations.
 	newBalanceDelta := transactionBalanceDelta(
 		transaction.Type,
 		transaction.Amount,
@@ -363,14 +378,11 @@ func (s *Service) Delete(
 	userID uint,
 	transactionID uint,
 ) error {
-
 	transaction, err := s.repo.GetByID(ctx, transactionID)
-
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return ErrTransactionNotFound
 		}
-
 		return err
 	}
 
@@ -394,7 +406,6 @@ func transactionBalanceDelta(
 	transactionType string,
 	amount int64,
 ) int64 {
-
 	if transactionType == TypeExpense {
 		return -amount
 	}
@@ -405,7 +416,6 @@ func transactionBalanceDelta(
 func toTransactionResponse(
 	transaction *Transaction,
 ) *TransactionResponseDto {
-
 	description := ""
 
 	if transaction.Description != nil {
@@ -425,4 +435,12 @@ func toTransactionResponse(
 
 func formatAmount(amount int64) string {
 	return fmt.Sprintf("%d.%02d", amount/100, amount%100)
+}
+
+func validateCategoryType(
+	categoryType string,
+	transactionType string,
+) bool {
+	return categoryType == category.CategoryTypeBoth ||
+		categoryType == transactionType
 }
